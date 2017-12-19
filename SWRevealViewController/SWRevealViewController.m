@@ -1398,49 +1398,51 @@ const int FrontViewPositionNone = 0xff;
 // Primitive method for view controller deployment and animated layout to the given position.
 - (void)_setFrontViewPosition:(FrontViewPosition)newPosition withDuration:(NSTimeInterval)duration
 {
-    void (^rearDeploymentCompletion)() = [self _rearViewDeploymentForNewFrontViewPosition:newPosition];
-    void (^rightDeploymentCompletion)() = [self _rightViewDeploymentForNewFrontViewPosition:newPosition];
-    void (^frontDeploymentCompletion)() = [self _frontViewDeploymentForNewFrontViewPosition:newPosition];
-    
-    void (^animations)() = ^()
-    {
-        // Calling this in the animation block causes the status bar to appear/dissapear in sync with our own animation
-        [self setNeedsStatusBarAppearanceUpdate];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        void (^rearDeploymentCompletion)() = [self _rearViewDeploymentForNewFrontViewPosition:newPosition];
+        void (^rightDeploymentCompletion)() = [self _rightViewDeploymentForNewFrontViewPosition:newPosition];
+        void (^frontDeploymentCompletion)() = [self _frontViewDeploymentForNewFrontViewPosition:newPosition];
         
-        // We call the layoutSubviews method on the contentView view and send a delegate, which will
-        // occur inside of an animation block if any animated transition is being performed
-        [_contentView layoutSubviews];
-    
-        if ([_delegate respondsToSelector:@selector(revealController:animateToPosition:)])
-            [_delegate revealController:self animateToPosition:_frontViewPosition];
-    };
-    
-    void (^completion)(BOOL) = ^(BOOL finished)
-    {
-        rearDeploymentCompletion();
-        rightDeploymentCompletion();
-        frontDeploymentCompletion();
-        [self _dequeue];
-    };
-    
-    if ( duration > 0.0 )
-    {
-        if ( _toggleAnimationType == SWRevealToggleAnimationTypeEaseOut )
+        void (^animations)() = ^()
         {
-            [UIView animateWithDuration:duration delay:0.0
-            options:UIViewAnimationOptionCurveEaseOut animations:animations completion:completion];
+            // Calling this in the animation block causes the status bar to appear/dissapear in sync with our own animation
+            [self setNeedsStatusBarAppearanceUpdate];
+            
+            // We call the layoutSubviews method on the contentView view and send a delegate, which will
+            // occur inside of an animation block if any animated transition is being performed
+            [_contentView layoutSubviews];
+            
+            if ([_delegate respondsToSelector:@selector(revealController:animateToPosition:)])
+                [_delegate revealController:self animateToPosition:_frontViewPosition];
+        };
+        
+        void (^completion)(BOOL) = ^(BOOL finished)
+        {
+            rearDeploymentCompletion();
+            rightDeploymentCompletion();
+            frontDeploymentCompletion();
+            [self _dequeue];
+        };
+        
+        if ( duration > 0.0 )
+        {
+            if ( _toggleAnimationType == SWRevealToggleAnimationTypeEaseOut )
+            {
+                [UIView animateWithDuration:duration delay:0.0
+                                    options:UIViewAnimationOptionCurveEaseOut animations:animations completion:completion];
+            }
+            else
+            {
+                [UIView animateWithDuration:_toggleAnimationDuration delay:0.0 usingSpringWithDamping:_springDampingRatio initialSpringVelocity:1/duration
+                                    options:0 animations:animations completion:completion];
+            }
         }
         else
         {
-            [UIView animateWithDuration:_toggleAnimationDuration delay:0.0 usingSpringWithDamping:_springDampingRatio initialSpringVelocity:1/duration
-            options:0 animations:animations completion:completion];
+            animations();
+            completion(YES);
         }
-    }
-    else
-    {
-        animations();
-        completion(YES);
-    }
+    });    
 }
 
 
